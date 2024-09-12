@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, {
   useState,
   useEffect,
@@ -14,25 +30,40 @@ interface Column {
   dataIndex: string;
 }
 interface Props {
+  value?: string;
+  multiple?: boolean;
   onChange: Function;
   idents?: Array<string>;
+  initVal?: Metric;
 }
 export interface Metric {
   name: string;
   description: string;
 }
 
-const MetricTable = ({ onChange, idents }: Props, ref: any) => {
+const MetricTable = (
+  { onChange, idents, multiple = true, value, initVal }: Props,
+  ref: any,
+) => {
   const { t } = useTranslation();
-  const [selMetrics, setSelMetrics] = useState<Metric[]>([]);
+  const [selMetrics, setSelMetrics] = useState<Metric[] | string>([]);
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [historyMetrics, setHistoryMetrics] = useState<Metric[]>([]);
-  // useEffect(() => {
-  //   getMetrics();
-  // }, []);
+  const [flag, setFlag] = useState(false);
+
   useEffect(() => {
     getMetrics();
   }, [JSON.stringify(idents)]);
+
+  useEffect(() => {
+    value && setSelMetrics(value);
+  }, [value]);
+  useEffect(() => {
+    if (historyMetrics.length && initVal && initVal['name']) {
+      !flag && multiple && handleSelectChange([initVal['name']]);
+      setFlag(true);
+    }
+  }, [historyMetrics]);
 
   const getMetrics = (query = '') => {
     if (query.length > 0 && query.length < 4) return; //因为后端性能问题，必须传入4字符才发起检索
@@ -43,19 +74,37 @@ const MetricTable = ({ onChange, idents }: Props, ref: any) => {
     };
     GetMetrics(queryData).then((res) => {
       if (res.dat.metrics) {
-        setMetrics(res.dat.metrics);
-        setHistoryMetrics(res.dat.metrics.concat(historyMetrics));
+        let history = res.dat.metrics.concat(historyMetrics);
+        let Metrics = res.dat.metrics;
+        if (initVal && initVal['name']) {
+          let isHistoryHave = history.find((e) => e.name === initVal.name);
+          let isMetricsHave = res.dat.metrics.find(
+            (e) => e.name === initVal.name,
+          );
+
+          if (isHistoryHave === undefined) {
+            history = history.concat(initVal);
+          }
+          if (isMetricsHave === undefined) {
+            Metrics = res.dat.metrics.concat(initVal);
+          }
+        }
+        setMetrics(Metrics);
+        setHistoryMetrics(history);
       }
     });
   };
 
   const handleSelectChange = (select) => {
     setSelMetrics(select); // 因为要把description展示在chart上所以反选出该对象；antd的 Select中的value不能为对象？
-
-    let matricObjList = select.map((item) => {
-      return historyMetrics.find((i) => i.name === item); // search之后metrics中不包含select的所有项，所以反查会丢项，需要记录所有查询过的metrics来反查
-    });
-    onChange(matricObjList);
+    if (multiple) {
+      let matricObjList = select.map((item) => {
+        return historyMetrics.find((i) => i.name === item); // search之后metrics中不包含select的所有项，所以反查会丢项，需要记录所有查询过的metrics来反查
+      });
+      onChange(matricObjList);
+    } else {
+      onChange(select);
+    }
   };
 
   const handleSearch = debounce((value) => {
@@ -71,7 +120,7 @@ const MetricTable = ({ onChange, idents }: Props, ref: any) => {
   return (
     <>
       <Select
-        mode='multiple'
+        mode={multiple ? 'multiple' : undefined}
         style={{
           width: '100%',
         }}
@@ -85,7 +134,8 @@ const MetricTable = ({ onChange, idents }: Props, ref: any) => {
             getMetrics();
           }
         }}
-        filterOption={false}
+        // filterOption={false}
+        showSearch
         dropdownClassName='overflow-586'
       >
         {metrics.map((item, i) => {

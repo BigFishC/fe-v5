@@ -1,20 +1,26 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import {
-  Form,
-  Input,
-  Button,
-  Modal,
-  Row,
-  Col,
-  message,
-  Space,
-  Select,
-} from 'antd';
-import { getContactsList } from '@/services/manage';
+import { Form, Input, Button, Modal, Row, Col, message, Space, Select } from 'antd';
+import { getNotifyChannels } from '@/services/manage';
 import { RootState, accountStoreState } from '@/store/accountInterface';
 import { ContactsItem } from '@/store/manageInterface';
-import { MinusCircleOutlined, PlusCircleOutlined } from '@ant-design/icons';
+import { MinusCircleOutlined, PlusCircleOutlined, CaretDownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 const { Option } = Select;
 export default function Info() {
@@ -22,28 +28,24 @@ export default function Info() {
   const [form] = Form.useForm();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [contactsList, setContactsList] = useState<ContactsItem[]>([]);
-  let { profile } = useSelector<RootState, accountStoreState>(
-    (state) => state.account,
-  );
-  const [selectAvatar, setSelectAvatar] = useState<string>(
-    profile.portrait || '/avatar1.png',
-  );
+  let { profile } = useSelector<RootState, accountStoreState>((state) => state.account);
+  const [selectAvatar, setSelectAvatar] = useState<string>(profile.portrait || '/image/avatar1.png');
   const [customAvatar, setCustomAvatar] = useState('');
   const dispatch = useDispatch();
   useEffect(() => {
-    const { id, nickname, email, phone, contacts } = profile;
-
-    // if (id) {
+    const { id, nickname, email, phone, contacts, portrait } = profile;
     form.setFieldsValue({
       nickname,
       email,
       phone,
       contacts,
     });
-    // }
+    if (portrait.startsWith('http')) {
+      setCustomAvatar(portrait);
+    }
   }, [profile]);
   useEffect(() => {
-    getContactsList().then((data: Array<ContactsItem>) => {
+    getNotifyChannels().then((data: Array<ContactsItem>) => {
       setContactsList(data);
     });
   }, []);
@@ -64,7 +66,7 @@ export default function Info() {
         return;
       }
 
-      fetch(customAvatar)
+      fetch(customAvatar, { mode: 'no-cors' })
         .then((res) => {
           setIsModalVisible(false);
           handleSubmit();
@@ -125,7 +127,7 @@ export default function Info() {
   const avatarList = new Array(8).fill(0).map((_, i) => i + 1);
 
   const handleImgClick = (i) => {
-    setSelectAvatar(`/avatar${i}.png`);
+    setSelectAvatar(`/image/avatar${i}.png`);
   };
 
   return (
@@ -175,11 +177,7 @@ export default function Info() {
                   return (
                     <>
                       {contact ? (
-                        <Form.Item
-                          label={contact.label + '：'}
-                          name={['contacts', key]}
-                          key={i}
-                        >
+                        <Form.Item label={contact.label + '：'} name={['contacts', key]} key={i}>
                           <Input placeholder={`${t('请输入')}${key}`} />
                         </Form.Item>
                       ) : null}
@@ -213,7 +211,7 @@ export default function Info() {
                             },
                           ]}
                         >
-                          <Select placeholder={t('请选择联系方式')}>
+                          <Select suffixIcon={<CaretDownOutlined />} placeholder={t('请选择联系方式')}>
                             {contactsList.map((item, index) => (
                               <Option value={item.key} key={index}>
                                 {item.label}
@@ -237,16 +235,10 @@ export default function Info() {
                         >
                           <Input placeholder={t('请输入值')} />
                         </Form.Item>
-                        <MinusCircleOutlined
-                          className='control-icon-normal'
-                          onClick={() => remove(name)}
-                        />
+                        <MinusCircleOutlined className='control-icon-normal' onClick={() => remove(name)} />
                       </Space>
                     ))}
-                    <PlusCircleOutlined
-                      className='control-icon-normal'
-                      onClick={() => add()}
-                    />
+                    <PlusCircleOutlined className='control-icon-normal' onClick={() => add()} />
                   </>
                 )}
               </Form.List>
@@ -260,47 +252,25 @@ export default function Info() {
           </Col>
           <Col span={4}>
             <div className='avatar'>
-              <img src={profile.portrait || '/avatar1.png'} />
-              <Button
-                type='primary'
-                className='update-avatar'
-                onClick={() => setIsModalVisible(true)}
-              >
+              <img src={profile.portrait || '/image/avatar1.png'} />
+              <Button type='primary' className='update-avatar' onClick={() => setIsModalVisible(true)}>
                 {t('更换头像')}
               </Button>
             </div>
           </Col>
         </Row>
       </Form>
-      <Modal
-        title={t('更换头像')}
-        visible={isModalVisible}
-        onOk={handleOk}
-        onCancel={handleCancel}
-        wrapClassName='avatar-modal'
-      >
+      <Modal title={t('更换头像')} visible={isModalVisible} onOk={handleOk} onCancel={handleCancel} wrapClassName='avatar-modal'>
         <div className='avatar-content'>
           {avatarList.map((i) => {
             return (
-              <div
-                key={i}
-                className={
-                  `/avatar${i}.png` === selectAvatar
-                    ? 'avatar active'
-                    : 'avatar'
-                }
-                onClick={() => handleImgClick(i)}
-              >
-                <img src={`/avatar${i}.png`} />
+              <div key={i} className={`/image/avatar${i}.png` === selectAvatar ? 'avatar active' : 'avatar'} onClick={() => handleImgClick(i)}>
+                <img src={`/image/avatar${i}.png`} />
               </div>
             );
           })}
         </div>
-        <Input
-          addonBefore={<span>{t('头像URL')}:</span>}
-          onChange={(e) => setCustomAvatar(e.target.value)}
-          value={customAvatar}
-        />
+        <Input addonBefore={<span>{t('头像URL')}:</span>} onChange={(e) => setCustomAvatar(e.target.value)} value={customAvatar} />
       </Modal>
     </>
   );

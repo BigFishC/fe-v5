@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useRef, useLayoutEffect } from 'react';
 import { Button, Input, Modal, Popconfirm, Form, message } from 'antd';
 import PageLayout from '@/components/pageLayout';
@@ -22,6 +38,7 @@ const { TextArea } = Input;
 import './index.less';
 import { download } from '@/utils';
 import { useTranslation } from 'react-i18next';
+import { useHistory } from 'react-router-dom';
 
 const Indicator: React.FC = () => {
   const { t } = useTranslation();
@@ -34,6 +51,7 @@ const Indicator: React.FC = () => {
   const [exportList, setExportList] = useState([] as string[]);
   const [editingKey, setEditingKey] = useState<Partial<InterfaceItem>>({});
   const [query, setQuery] = useState<string>('');
+  const history = useHistory();
   const moreOperations: MoreOptions = {
     导入指标: 'import',
     导出指标: 'export',
@@ -146,11 +164,15 @@ const Indicator: React.FC = () => {
       title: t('指标名称'),
       dataIndex: 'metric',
       key: 'metric',
-      render: (text: string) => {
+      render: (text: string, record: InterfaceItem) => {
         return (
           <a
-            style={{
-              color: 'black',
+            onClick={() => {
+              let path = {
+                pathname: `/metric/explorer`,
+                state: { name: text, description: record.description },
+              };
+              history.push(path);
             }}
           >
             {text}

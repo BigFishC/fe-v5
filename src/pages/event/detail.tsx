@@ -1,245 +1,349 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useState } from 'react';
+import { useHistory, useParams } from 'react-router';
+import moment from 'moment';
+import _ from 'lodash';
+import { useSelector } from 'react-redux';
+import { Button, Card, message, Space, Spin, Tag, Typography } from 'antd';
+import { Link } from 'react-router-dom';
 import PageLayout from '@/components/pageLayout';
-import { useParams, useHistory } from 'react-router-dom';
-import { RootState } from '@/store/common';
-import { eventStoreState, warningEventItem } from '@/store/eventInterface';
-import { Form, Table, Divider, Tag } from 'antd';
-import { warningStatus } from '@/store/eventInterface';
-import dayjs from 'dayjs';
-import { getAlertEventsById } from '@/services/warning';
-import D3Chart from '@/components/D3Chart';
-import { ChartComponentProps } from '@/store/chart';
-import classNames from 'classnames';
-import './index.less';
-import { useTranslation } from 'react-i18next';
+import { getAlertEventsById, getHistoryEventsById } from '@/services/warning';
 import { priorityColor } from '@/utils/constant';
-import ColorTag from '@/components/ColorTag';
-export const Detail: React.FC = () => {
-  const { t } = useTranslation();
-  const { id } =
-    useParams<{
-      id: string;
-    }>();
-  const [options, setOptions] = useState<ChartComponentProps | null>(null);
-  const [currentEdit, setCurrentEdit] = useState<warningEventItem>();
+import { deleteAlertEventsModal } from '.';
+import { RootState } from '@/store/common';
+import { CommonStoreState } from '@/store/commonInterface';
+import { parseValues } from '@/pages/warning/strategy/components/utils';
+import Preview from './Preview';
+import LogsDetail from './LogsDetail';
+import PrometheusDetail from './Detail/Prometheus';
+import ElasticsearchDetail from './Detail/Elasticsearch';
+import AliyunSLSDetail from './Detail/AliyunSLS';
+import './detail.less';
+
+const { Paragraph } = Typography;
+const EventDetailPage: React.FC = () => {
+  const { busiId, eventId } = useParams<{ busiId: string; eventId: string }>();
+  const { busiGroups } = useSelector<RootState, CommonStoreState>((state) => state.common);
+  const handleNavToWarningList = (id) => {
+    if (busiGroups.find((item) => item.id === id)) {
+      history.push(`/alert-rules?id=${id}`);
+    } else {
+      message.error('该业务组已删除或无查看权限');
+    }
+  };
   const history = useHistory();
-  useEffect(() => {
-    getAlertEventsById(id).then((res) => {
-      if (res.dat) {
-        setCurrentEdit(res.dat);
-        const { history_points } = res.dat;
-      }
-    });
-  }, [id]);
-  const columns = [
+  const isHistory = history.location.pathname.includes('alert-his-events');
+  const [eventDetail, setEventDetail] = useState<any>();
+  if (eventDetail) eventDetail.cate = eventDetail.cate || 'prometheus'; // TODO: 兼容历史的告警事件
+  const parsedEventDetail = parseValues(eventDetail);
+  const descriptionInfo = [
     {
-      title: t('时间'),
-      dataIndex: 't',
-      render: (data) => {
-        return <>{dayjs(data * 1000).format('YYYY-MM-DD HH:mm:ss')}</>;
+      label: '规则标题',
+      key: 'rule_name',
+      render(content, { rule_id }) {
+        return (
+          <Link
+            to={{
+              pathname: `/alert-rules/edit/${rule_id}`,
+            }}
+            target='_blank'
+          >
+            {content}
+          </Link>
+        );
       },
     },
     {
-      title: t('值'),
-      dataIndex: 'v',
+      label: '业务组',
+      key: 'group_name',
+      render(content, { group_id }) {
+        return (
+          <Button size='small' type='link' className='rule-link-btn' onClick={() => handleNavToWarningList(group_id)}>
+            {content}
+          </Button>
+        );
+      },
+    },
+    { label: '规则备注', key: 'rule_note' },
+    { label: '所属集群', key: 'cluster' },
+    {
+      label: '告警级别',
+      key: 'severity',
+      render: (severity) => {
+        return <Tag color={priorityColor[severity - 1]}>S{severity}</Tag>;
+      },
+    },
+    {
+      label: '事件状态',
+      key: 'is_recovered',
+      render(isRecovered) {
+        return <Tag color={isRecovered ? 'green' : 'red'}>{isRecovered ? 'Recovered' : 'Triggered'}</Tag>;
+      },
+    },
+    {
+      label: '事件标签',
+      key: 'tags',
+      render(tags) {
+        return tags
+          ? tags.map((tag) => (
+              <Tag color='purple' key={tag}>
+                {tag}
+              </Tag>
+            ))
+          : '';
+      },
+    },
+    { label: '对象备注', key: 'target_note' },
+    {
+      label: '触发时间',
+      key: 'trigger_time',
+      render(time) {
+        return moment(time * 1000).format('YYYY-MM-DD HH:mm:ss');
+      },
+    },
+    {
+      label: '触发时值',
+      key: 'trigger_value',
+      render(val) {
+        return (
+          <span>
+            {val}
+            {eventDetail?.cate === 'elasticsearch' && (
+              <Button
+                size='small'
+                style={{ marginLeft: 16 }}
+                onClick={() => {
+                  LogsDetail.Elasticsearch({
+                    id: eventId,
+                    start: eventDetail.trigger_time - 2 * eventDetail.prom_eval_interval,
+                    end: eventDetail.trigger_time + eventDetail.prom_eval_interval,
+                  });
+                }}
+              >
+                日志详情
+              </Button>
+            )}
+            {eventDetail?.cate === 'aliyun-sls' && (
+              <Button
+                size='small'
+                style={{ marginLeft: 16 }}
+                onClick={() => {
+                  LogsDetail.AliyunSLS({
+                    id: eventId,
+                    start: eventDetail.trigger_time - 2 * eventDetail.prom_eval_interval,
+                    end: eventDetail.trigger_time + eventDetail.prom_eval_interval,
+                  });
+                }}
+              >
+                日志详情
+              </Button>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      label: '恢复时间',
+      key: 'recover_time',
+      render(time) {
+        return moment((time || 0) * 1000).format('YYYY-MM-DD HH:mm:ss');
+      },
+    },
+    {
+      label: '告警方式',
+      key: 'rule_algo',
+      render(text) {
+        if (text) {
+          return '智能告警';
+        }
+        return '阈值告警';
+      },
+    },
+    {
+      label: '数据源类型',
+      key: 'cate',
+    },
+    ...(eventDetail?.cate === 'prometheus'
+      ? PrometheusDetail({
+          eventDetail,
+          history,
+        })
+      : [false]),
+    ...(eventDetail?.cate === 'elasticsearch' ? ElasticsearchDetail() : [false]),
+    ...(eventDetail?.cate === 'aliyun-sls' ? AliyunSLSDetail() : [false]),
+    {
+      label: '执行频率',
+      key: 'prom_eval_interval',
+      render(content) {
+        return `${content} 秒`;
+      },
+    },
+    {
+      label: '持续时长',
+      key: 'prom_for_duration',
+      render(content) {
+        return `${content} 秒`;
+      },
+    },
+    {
+      label: '通知媒介',
+      key: 'notify_channels',
+      render(channels) {
+        return channels.join(' ');
+      },
+    },
+    {
+      label: '告警接收组',
+      key: 'notify_groups_obj',
+      render(groups) {
+        return groups ? groups.map((group) => <Tag color='purple'>{group.name}</Tag>) : '';
+      },
+    },
+    {
+      label: '回调地址',
+      key: 'callbacks',
+      render(callbacks) {
+        return callbacks
+          ? callbacks.map((callback) => (
+              <Tag>
+                <Paragraph copyable style={{ margin: 0 }}>
+                  {callback}
+                </Paragraph>
+              </Tag>
+            ))
+          : '';
+      },
+    },
+    {
+      label: '预案链接',
+      key: 'runbook_url',
+      render(url) {
+        return (
+          <a href={url} target='_balank'>
+            {url}
+          </a>
+        );
+      },
     },
   ];
+
+  useEffect(() => {
+    const requestPromise = isHistory ? getHistoryEventsById(busiId, eventId) : getAlertEventsById(busiId, eventId);
+    requestPromise.then((res) => {
+      setEventDetail(res.dat);
+    });
+  }, [busiId, eventId]);
+
   return (
-    <PageLayout showBack title={t('告警详情')}>
-      <div className='event-detail-content'>
-        <div className='event-detail-content-main'>
-           
-          <div>
-            <span className={'event-detail-content-main-label'}>
-              {t('基本信息')}：
-            </span>{' '}
-            {currentEdit && (
-              <Tag color={priorityColor[currentEdit?.priority - 1]}>
-                P{currentEdit?.priority}
-              </Tag>
-            )}
-            <Divider type='vertical' />
-            {currentEdit && (
-              <>
-                {dayjs(currentEdit.trigger_time * 1000 || 0).format(
-                  'YYYY-MM-DD HH:mm:ss',
-                )}
-              </>
-            )}
-            <Divider type='vertical' />
-            {warningStatus.Enable === currentEdit?.status
-              ? t('已触发')
-              : t('已屏蔽')}
-            <Divider type='vertical' />
-            <span
-              className={classNames('event-detail-content-main-active')}
-              onClick={() =>
-                history.push(`/strategy/edit/${currentEdit?.rule_id}`)
-              }
-            >
-              {currentEdit?.rule_name}
-
-              {
-                <>
-                  {currentEdit && currentEdit.notify_user_objs
-                    ? currentEdit.notify_user_objs.map((tag, index) => {
-                        return tag ? (
-                          <span key={index}>
-                            <Divider type='vertical' />
-                            <ColorTag text={tag.nickname}></ColorTag>
-                          </span>
-                        ) : null;
-                      })
-                    : ''}
-                </>
-              }
-            </span>
-          </div>
-           
-          {currentEdit?.rule_note && (
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('备注')}：
-              </span>{' '}
-              {currentEdit?.rule_note}
-            </div>
-          )}
-           <div></div> 
-          {
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('标签')}：
-              </span>{' '}
-              {
-                <>
-                  {currentEdit && currentEdit.tags
-                    ? currentEdit.tags
-                        .trim()
-                        .split(' ')
-                        .map((tag, index) => {
-                          return tag ? (
-                            <ColorTag text={tag} key={index}></ColorTag>
-                          ) : null;
-                        })
-                    : ''}
-                </>
-              }
-            </div>
-          }
-          {
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('资源标识')}：
-              </span>{' '}
-              {currentEdit?.res_ident}
-            </div>
-          }
-          {currentEdit?.res_classpaths && (
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('资源分组')}：
-              </span>{' '}
-              {
-                <>
-                  {currentEdit && currentEdit.res_classpaths
-                    ? currentEdit.res_classpaths
-                        .split(' ')
-                        .map((tag, index) => {
-                          return tag ? (
-                            <ColorTag text={tag} key={index}></ColorTag>
-                          ) : null;
-                        })
-                    : ''}
-                </>
-              }
-            </div>
-          )}
-          {currentEdit?.readable_expression && (
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('表达式')}：
-              </span>{' '}
-              {currentEdit?.readable_expression}
-            </div>
-          )}
-          {currentEdit?.runbook_url && (
-            <div>
-              <span className='event-detail-content-main-label'>
-                {t('预案手册')}：
-              </span>{' '}
-              {currentEdit?.runbook_url}
-            </div>
-          )}
-          {currentEdit?.history_points.map((item, i) => {
-            const { metric, tags } = item;
-            let options: ChartComponentProps = {
-              limit: 50,
-              metric,
-              xplotline: currentEdit.trigger_time,
-              tags: Object.keys(tags).map((key) => {
-                return {
-                  key,
-                  value: tags[key],
-                };
-              }),
-              //当前时间-触发时间<1小时，结束时间为触发时间，起始时间为  触发时间-2小时
-              range:
-                //当前时间-触发时间>1小时，结束时间为触发时间+1小时，起始时间为  触发时间-1小时
-                dayjs().subtract(1, 'hour').unix() > currentEdit.trigger_time
-                  ? {
-                      start: dayjs(currentEdit.trigger_time * 1000)
-                        .subtract(1, 'hour')
-                        .unix(),
-                      end: dayjs(currentEdit.trigger_time * 1000)
-                        .add(1, 'hour')
-                        .unix(),
-                    }
-                  : {
-                      start: dayjs(currentEdit.trigger_time * 1000)
-                        .subtract(2, 'hour')
-                        .unix(),
-                      end: currentEdit.trigger_time,
-                    },
-            };
-
-            if (currentEdit.is_prome_pull) {
-              options.prome_ql = currentEdit.readable_expression;
-            }
-
-            return (
-              <div
-                key={i}
-                className='event-detail-content-main-chart-and-table'
-              >
-                {item.metric && (
-                  <div>
-                    <span
-                      style={{
-                        width: '60px',
+    <PageLayout title='告警详情' showBack backPath='/alert-his-events' hideCluster>
+      <div className='event-detail-container'>
+        <Spin spinning={!eventDetail}>
+          <Card
+            className='desc-container'
+            title='告警事件详情'
+            actions={[
+              <div className='action-btns'>
+                <Space>
+                  <Button
+                    type='primary'
+                    onClick={() => {
+                      history.push('/alert-mutes/add', {
+                        group_id: eventDetail.group_id,
+                        cate: eventDetail.cate,
+                        cluster: eventDetail.cluster,
+                        tags: eventDetail.tags
+                          ? eventDetail.tags.map((tag) => {
+                              const [key, value] = tag.split('=');
+                              return {
+                                func: '==',
+                                key,
+                                value,
+                              };
+                            })
+                          : [],
+                      });
+                    }}
+                  >
+                    屏蔽
+                  </Button>
+                  {!isHistory && (
+                    <Button
+                      danger
+                      onClick={() => {
+                        if (eventDetail.group_id) {
+                          deleteAlertEventsModal(eventDetail.group_id, [Number(eventId)], () => {
+                            history.replace('/alert-cur-events');
+                          });
+                        } else {
+                          message.warn('该告警未返回业务组ID');
+                        }
                       }}
                     >
-                      {t('现场值:')}
-                    </span>
-                    {item.metric}
-                  </div>
-                )}
-
-                <Table
-                  columns={columns}
-                  rowKey={'t'}
-                  pagination={false}
-                  dataSource={item.points || []}
-                ></Table>
-                <D3Chart
-                  title={item.metric || currentEdit.readable_expression}
-                  options={options}
-                ></D3Chart>
+                      删除
+                    </Button>
+                  )}
+                </Space>
+              </div>,
+            ]}
+          >
+            {eventDetail && (
+              <div>
+                {parsedEventDetail.rule_algo || parsedEventDetail.cate === 'elasticsearch' || parsedEventDetail.cate === 'aliyun-sls' ? (
+                  <Preview
+                    data={parsedEventDetail}
+                    triggerTime={eventDetail.trigger_time}
+                    onClick={(event, datetime) => {
+                      if (parsedEventDetail.cate === 'elasticsearch') {
+                        LogsDetail.Elasticsearch({
+                          id: eventId,
+                          start: moment(datetime).unix() - 2 * eventDetail.prom_eval_interval,
+                          end: moment(datetime).unix() + eventDetail.prom_eval_interval,
+                        });
+                      } else if (parsedEventDetail.cate === 'aliyun-sls') {
+                        LogsDetail.AliyunSLS({
+                          id: eventId,
+                          start: moment(datetime).unix() - 2 * eventDetail.prom_eval_interval,
+                          end: moment(datetime).unix() + eventDetail.prom_eval_interval,
+                        });
+                      }
+                    }}
+                  />
+                ) : null}
+                {descriptionInfo
+                  .filter((item: any) => {
+                    if (!item) return false;
+                    return parsedEventDetail.is_recovered ? true : item.key !== 'recover_time';
+                  })
+                  .map(({ label, key, render }: any, i) => {
+                    return (
+                      <div className='desc-row' key={key + i}>
+                        <div className='desc-label'>{label}：</div>
+                        <div className='desc-content'>{render ? render(parsedEventDetail[key], parsedEventDetail) : parsedEventDetail[key]}</div>
+                      </div>
+                    );
+                  })}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </Card>
+        </Spin>
       </div>
     </PageLayout>
   );
 };
-export default Detail;
+
+export default EventDetailPage;

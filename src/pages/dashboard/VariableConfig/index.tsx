@@ -1,208 +1,191 @@
-import React, {
-  useImperativeHandle,
-  useMemo,
-  useReducer,
-  useState,
-} from 'react';
-import { Row, Col } from 'antd';
-import TagItem from './TagItem';
-import { Button } from 'antd';
-import {
-  ADD_ITEM,
-  CLASS_PATH_VALUE,
-  CLASS_PATH_PREFIX_VALUE,
-  INIT_DATA,
-  TagFilterReducer,
-  TagFilterStore,
-} from './constant';
-import { EditOutlined, PlusOutlined } from '@ant-design/icons';
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+import React, { useState, useEffect } from 'react';
+import _ from 'lodash';
+import queryString from 'query-string';
+import { useLocation } from 'react-router-dom';
 import classNames from 'classnames';
-import { TagDataItem, TagFilterData, TagFilterResponse } from './definition';
-import { useEffect } from 'react';
+import { EditOutlined } from '@ant-design/icons';
+import { IRawTimeRange } from '@/components/TimeRangePicker';
+import { convertExpressionToQuery, replaceExpressionVars, getVaraiableSelected, setVaraiableSelected, stringToRegex, filterOptionsByReg } from './constant';
+import { IVariable } from './definition';
+import DisplayItem from './DisplayItem';
+import EditItems from './EditItems';
 import './index.less';
-import { useTranslation } from 'react-i18next';
-interface ITagFilterProps {
-  isOpen?: boolean;
-  onChange: (data: TagFilterResponse) => void;
+
+interface IProps {
+  id: string;
+  cluster: string; // 集群变动后需要重新获取数据
+  editable?: boolean;
+  value?: IVariable[];
+  range: IRawTimeRange;
+  onChange: (data: IVariable[], needSave: boolean, options?: IVariable[]) => void;
+  onOpenFire?: () => void;
+  isPreview?: boolean;
 }
 
-const TagFilter: React.ForwardRefRenderFunction<any, ITagFilterProps> = (
-  { isOpen = false, onChange },
-  ref,
-) => {
-  const { t } = useTranslation();
-  const [editing, setEditing] = useState<boolean>(isOpen);
-  const [data, dispatch] = useReducer(TagFilterReducer, {
-    tagList: [],
-    duplicateList: [],
-    invalidList: [],
-    nonNameList: [],
-    hasClassPath: false,
-    hasInit: false,
+function includes(source, target) {
+  if (_.isArray(target)) {
+    return _.intersection(source, target);
+  }
+  return _.includes(source, target);
+}
+
+function index(props: IProps) {
+  const query = queryString.parse(useLocation().search);
+  const { id, cluster, editable = true, range, onChange, onOpenFire, isPreview = false } = props;
+  const [editing, setEditing] = useState<boolean>(false);
+  const [data, setData] = useState<IVariable[]>([]);
+  const dataWithoutConstant = _.filter(data, (item) => item.type !== 'constant');
+  const [refreshFlag, setRefreshFlag] = useState<string>(_.uniqueId('refreshFlag_'));
+  const value = _.map(props.value, (item) => {
+    return {
+      ...item,
+      type: item.type || 'query',
+    };
   });
+
   useEffect(() => {
-    if (!editing && data.hasInit) {
-      const nextData = packingData();
-      onChange && onChange(nextData);
-    }
-  }, [JSON.stringify(data.tagList)]);
-
-  const addVariable = function () {
-    dispatch({
-      type: ADD_ITEM,
-    });
-  };
-
-  const setInitData = (originData) => {
-    const data = unpackData(originData);
-    dispatch({
-      type: INIT_DATA,
-      data,
-    });
-  };
-
-  const packingData = (): TagFilterResponse => {
-    const { tagList } = data;
-    const tagArray: TagDataItem[] = [];
-    let classpath;
-    (tagList as TagDataItem[]).forEach((item) => {
-      const { key } = item;
-
-      if (key !== CLASS_PATH_VALUE && key !== CLASS_PATH_PREFIX_VALUE) {
-        tagArray.push(item);
-      } else {
-        classpath = item;
+    if (value) {
+      let result: IVariable[] = [];
+      try {
+        (async () => {
+          for (let idx = 0; idx < value.length; idx++) {
+            const item = _.cloneDeep(value[idx]);
+            if ((item.type === 'query' || item.type === 'custom') && item.definition) {
+              const definition = idx > 0 ? replaceExpressionVars(item.definition, result, idx, id) : item.definition;
+              const options = await convertExpressionToQuery(definition, range, item, cluster);
+              const regFilterOptions = filterOptionsByReg(options, item.reg, result, idx, id);
+              result[idx] = item;
+              result[idx].fullDefinition = definition;
+              result[idx].options = item.type === 'query' ? _.sortBy(regFilterOptions) : regFilterOptions;
+              // 当大盘变量值为空时，设置默认值
+              // 如果已选项不在待选项里也视做空值处理
+              const selected = getVaraiableSelected(item.name, id);
+              if (query.__variable_value_fixed === undefined) {
+                if (selected === null || (selected && !_.isEmpty(regFilterOptions) && !includes(regFilterOptions, selected))) {
+                  const head = regFilterOptions?.[0];
+                  const defaultVal = item.multi ? (head ? [head] : []) : head;
+                  setVaraiableSelected({ name: item.name, value: defaultVal, id, urlAttach: true });
+                }
+              }
+            } else if (item.type === 'textbox') {
+              result[idx] = item;
+              const selected = getVaraiableSelected(item.name, id);
+              if (selected === null && query.__variable_value_fixed === undefined) {
+                setVaraiableSelected({ name: item.name, value: item.defaultValue, id, urlAttach: true });
+              }
+            } else if (item.type === 'constant') {
+              result[idx] = item;
+              const selected = getVaraiableSelected(item.name, id);
+              if (selected === null && query.__variable_value_fixed === undefined) {
+                setVaraiableSelected({ name: item.name, value: item.definition, id, urlAttach: true });
+              }
+            }
+          }
+          // 设置变量默认值，优先从 url 中获取，其次是 localStorage
+          result = _.map(_.compact(result), (item) => {
+            return {
+              ...item,
+              value: getVaraiableSelected(item?.name, id),
+            };
+          });
+          setData(result);
+          onChange(value, false, result);
+        })();
+      } catch (e) {
+        console.log(e);
       }
-    });
-    return classpath
-      ? {
-          tags: tagArray,
-          classpath_tagName: classpath?.tagName || '',
-          classpath_id: classpath?.value ? classpath?.value : 0,
-          classpath_prefix:
-            classpath?.key === CLASS_PATH_PREFIX_VALUE
-              ? 1
-              : classpath?.key === CLASS_PATH_VALUE
-              ? 0
-              : undefined,
-        }
-      : {
-          tags: tagArray,
-        };
-  };
-
-  const unpackData = (originData: string) => {
-    let data: TagFilterData;
-
-    try {
-      const jsonData = JSON.parse(originData);
-      const { tags, classpath_id, classpath_prefix, classpath_tagName } =
-        jsonData;
-
-      if (
-        typeof classpath_id !== 'undefined' &&
-        typeof classpath_prefix !== 'undefined' &&
-        typeof classpath_tagName !== 'undefined'
-      ) {
-        data = {
-          tagList: tags.concat({
-            tagName: classpath_tagName,
-            key: CLASS_PATH_VALUE,
-            value: classpath_id,
-            prefix: classpath_prefix === 1,
-          }),
-          hasClassPath: true,
-        };
-      } else {
-        data = {
-          tagList: tags,
-        };
-      }
-    } catch (error) {
-      data = {
-        tagList: [],
-      };
     }
+  }, [JSON.stringify(value), cluster, refreshFlag]);
 
-    return data;
-  };
-
-  const handleFinish = () => {
-    setEditing(false);
-    const data = packingData();
-    onChange && onChange(data);
-  };
-
-  const handleEdit = () => {
-    setEditing(true);
-  };
-
-  const buttonUseFul = useMemo(() => {
-    if (!data) return true;
-    const { duplicateList, nonNameList, invalidList } = data;
-    return (
-      duplicateList.length === 0 &&
-      nonNameList.length === 0 &&
-      invalidList.length === 0
-    );
-  }, [
-    JSON.stringify(data.duplicateList),
-    JSON.stringify(data.nonNameList),
-    JSON.stringify(data.invalidList),
-  ]);
-  useImperativeHandle(ref, () => ({
-    setInitData,
-  }));
   return (
-    <TagFilterStore.Provider value={[data, dispatch]}>
-      <div className='tag-area'>
-        {editing ? (
-          <Row gutter={[6, 6]} className='tag-header'>
-            <Col span={3}>{t('变量名')}</Col>
-            <Col span={3}>{t('标签或资源分组')}</Col>
-            <Col span={3}>{t('默认值')}</Col>
-          </Row>
+    <div className='tag-area'>
+      <div className={classNames('tag-content', 'tag-content-close')}>
+        {_.map(dataWithoutConstant, (item) => {
+          return (
+            <DisplayItem
+              key={item.name}
+              expression={item}
+              value={item.value}
+              onChange={(val) => {
+                // 缓存变量值，更新 url 里的变量值
+                setVaraiableSelected({
+                  name: item.name,
+                  value: val,
+                  id,
+                  urlAttach: true,
+                  vars: dataWithoutConstant,
+                });
+                setData(
+                  _.map(data, (subItem) => {
+                    if (subItem.name === item.name) {
+                      return {
+                        ...item,
+                        value: val,
+                      };
+                    }
+                    return subItem;
+                  }),
+                );
+                setRefreshFlag(_.uniqueId('refreshFlag_'));
+              }}
+            />
+          );
+        })}
+        {editable && !isPreview ? (
+          <EditOutlined
+            className='icon'
+            onClick={() => {
+              setEditing(true);
+              onOpenFire && onOpenFire();
+            }}
+          />
         ) : null}
-        <div
-          className={classNames(
-            'tag-content',
-            !editing ? 'tag-content-close' : '',
-          )}
-        >
-          {data.tagList.map((tagItem, index) => (
-            <TagItem
-              isEditing={editing}
-              key={index}
-              tagData={tagItem}
-              index={index}
-            ></TagItem>
-          ))}
-          {editing ? null : Array.isArray(data.tagList) &&
-            data.tagList.length ? (
-            <EditOutlined className='icon' onClick={handleEdit}></EditOutlined>
-          ) : (
-            <div className='add-variable-tips' onClick={handleEdit}>
-              {t('添加大盘变量')}
-            </div>
-          )}
-        </div>
-        {editing ? (
-          <div className='tag-control-area'>
-            <Button onClick={addVariable} icon={<PlusOutlined />}>
-              {t('添加变量')}
-            </Button>
-            <Button
-              type='primary'
-              disabled={!buttonUseFul}
-              onClick={handleFinish}
-            >
-              {t('完成')}
-            </Button>
+        {(data ? _.filter(data, (item) => item.type != 'constant')?.length === 0 : true) && editable && (
+          <div
+            className='add-variable-tips'
+            onClick={() => {
+              setEditing(true);
+              onOpenFire && onOpenFire();
+            }}
+          >
+            添加大盘变量
           </div>
-        ) : null}
+        )}
       </div>
-    </TagFilterStore.Provider>
+      <EditItems
+        cluster={cluster}
+        visible={editing}
+        setVisible={setEditing}
+        value={value}
+        onChange={(v: IVariable[]) => {
+          if (v) {
+            onChange(v, true);
+            setData(v);
+          }
+        }}
+        range={range}
+        id={id}
+      />
+    </div>
   );
-};
+}
 
-export default React.forwardRef(TagFilter);
+export type { IVariable } from './definition';
+export { replaceExpressionVars } from './constant';
+export default React.memo(index);

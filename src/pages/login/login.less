@@ -7,7 +7,51 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  .left-top-bg {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 600px;
+  }
+  .right-bottom-bg {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    width: 632px;
+  }
+  .logo.integration {
+    display: block;
+    left: 100px;
+    top: 62px;
+    width: 135px;
+    position: absolute;
+    cursor: pointer;
+    &.slim {
+      display: none;
+    }
+  }
+  .login-home {
+    position: absolute;
+    right: 100px;
+    top: 62px;
+    width: 40px;
+  }
+  .login-message {
+    position: absolute;
+    right: 164px;
+    top: 62px;
+    width: 40px;
+    cursor: pointer;
+  }
   .banner {
+    &.integration {
+      background-image: linear-gradient(212deg, #9c52ff 0%, #694df4 36%, #6a4df4 76%, #a343f5 100%);
+      display: flex;
+      width: 900px;
+      justify-content: left;
+      align-items: center;
+    }
+    flex: 1;
     background: rgb(20, 22, 49);
     width: 720px;
     height: 100%;
@@ -32,29 +76,44 @@
       }
     }
   }
-  @media screen and (max-width: 1070px) {
-    .banner {
-      display: none;
-    }
-  }
   .login-panel {
     height: 100%;
-    width: 100%;
+    // width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     .login-main {
+      &.integration {
+        z-index: 5;
+        margin-bottom: 35px;
+        .login-title {
+          text-align: center;
+          width: 80%;
+        }
+        .ant-form-item {
+          margin-bottom: 24px;
+        }
+        .ant-form-item-label > label {
+          font-size: 16px;
+        }
+        input {
+          font-size: 14px;
+        }
+        .ant-btn {
+          font-size: 16px;
+          background: linear-gradient(to right, #8874c0, #6c53b1);
+        }
+      }
       width: 600px;
       padding: 50px;
       .login-title {
         font-size: 30px;
-        margin-bottom: 20px;
+        margin-bottom: 40px;
         color: @fontColorLevel2;
       }
       .ant-form-vertical {
         width: 80%;
         .ant-input-affix-wrapper {
-          border-radius: 18px;
           height: 36px;
           line-height: 36px;
           background: transparent;
@@ -71,7 +130,65 @@
         .ant-btn {
           width: 100%;
           height: 40px;
-          border-radius: 20px;
+        }
+      }
+    }
+  }
+  .login-other {
+    font-size: 14px;
+    strong {
+      font-weight: 500;
+    }
+  }
+  @media screen and (max-width: 1070px) {
+    .banner {
+      display: none;
+      &.integration {
+        display: none;
+      }
+    }
+    .logo.integration {
+      display: none;
+      left: 50px;
+      &.slim {
+        display: block;
+      }
+    }
+    .login-home {
+      position: absolute;
+      right: 108px;
+      top: 62px;
+      width: 40px;
+    }
+    .login-message {
+      position: absolute;
+      right: 50px;
+      top: 62px;
+      width: 40px;
+      cursor: pointer;
+    }
+    .login-title-sub {
+      font-size: 20px;
+    }
+  }
+  @media screen and (max-width: 600px) {
+    .left-top-bg {
+      width: 100%;
+    }
+    .right-bottom-bg {
+      width: 100%;
+    }
+    .login-panel {
+      width: 100%;
+    }
+    .login-main {
+      width: 100%;
+      &.integration {
+        .login-title {
+          width: 100% !important;
+        }
+        .ant-form-vertical {
+          width: 100%;
         }
       }
     }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React from 'react';
 
 export interface Contacts {
@@ -41,12 +57,16 @@ export enum UserType {
   Team = '团队',
 }
 export interface TeamInfo {
-  user_group: Team;
+  user_groups?: Team;
+  user_group?: Team;
   users: Array<User>;
 }
 export enum ActionType {
   CreateUser = '创建用户',
   CreateTeam = '创建团队',
+  CreateBusiness = '创建业务组',
+  AddBusinessMember = '添加业务组成员',
+  EditBusiness = '编辑业务组',
   EditUser = '编辑用户信息',
   EditTeam = '编辑团队信息',
   Reset = '重置密码',
@@ -76,11 +96,14 @@ export interface ModalProps {
   teamId?: string;
   memberId?: string;
   onSearch?: any;
+  width?: number;
 }
 export interface TeamProps {
   onClose?: any;
   teamId?: string;
+  businessId?: string;
   onSelect?: any;
+  action?: ActionType;
 }
 export interface UserAndPasswordFormProps {
   userId?: string;

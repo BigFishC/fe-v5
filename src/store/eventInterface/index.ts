@@ -1,3 +1,21 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+import { RelativeRange } from '@/components/DateRangePicker';
+
 export enum warningPriority {
   First = 1,
   Second = 2,
@@ -7,6 +25,11 @@ export enum warningPriority {
 export enum warningStatus {
   Enable = 0,
   UnEnable = 1,
+}
+
+export enum IsRecovery {
+  Alert = 0,
+  Recovery = 1,
 }
 
 export enum warningLabel {
@@ -24,7 +47,7 @@ export type warningEventItem = {
   res_classpaths: string; //资源所属的classpaths
   priority: warningPriority; //int 告警级别 1->p1 2->p2 3->p3
   status: warningStatus; // int 枚举,标识是否 被屏蔽, 1已屏蔽 2已触犯
-  is_recovery: string; //int 枚举, 0: alert, 1: recovery
+  is_recovery: IsRecovery; //int 枚举, 0: alert, 1: recovery
   history_points: Array<{
     metric: string;
     points: Array<{
@@ -47,4 +70,12 @@ export type warningEventItem = {
 
 export interface eventStoreState {
   currentEdit: warningEventItem | null;
+  alertings: { ['index']?: number };
+  severity: number | undefined;
+  hourRange: RelativeRange;
+  queryContent: string;
+  hisSeverity: number | undefined;
+  hisEventType: 0 | 1 | undefined;
+  hisHourRange: RelativeRange;
+  hisQueryContent: string;
 }

@@ -1,21 +1,29 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect, useImperativeHandle } from 'react';
 import { PaginationProps, Table, TableProps } from 'antd';
 import { PAGE_SIZE, PAGE_SIZE_MAX } from '@/utils/constant';
-import {
-  baseFePagingData,
-  baseFePagingReq,
-  basePagingData,
-  basePagingReq,
-  IBasePagingParams,
-} from '@/store/common';
+import { baseFePagingData, baseFePagingReq, basePagingData, basePagingReq, IBasePagingParams } from '@/store/common';
 import { useTranslation } from 'react-i18next';
 export type IBaseTableProps<RecordType = any> = TableProps<RecordType> & {
   /**
    * @desc table请求接口
    */
-  fetchHandle: (
-    data: IBasePagingParams,
-  ) => Promise<basePagingReq<RecordType> | baseFePagingReq<RecordType>>;
+  fetchHandle: (data: IBasePagingParams) => Promise<basePagingReq<RecordType> | baseFePagingReq<RecordType>>;
   /**
    * @desc 请求返回的数据
    */
@@ -24,6 +32,7 @@ export type IBaseTableProps<RecordType = any> = TableProps<RecordType> & {
   /**
    * @desc 是否需要分页
    */
+  feQuery?: string;
 
   needPagination?: boolean;
   /**
@@ -133,10 +142,7 @@ const BaseTable = function <T extends Object>(
       if (!fePaging) {
         fetchData();
       } else {
-        const targetList = filterDataList.slice(
-          (pageNumber - 1) * defaultPageSize,
-          pageNumber * defaultPageSize,
-        );
+        const targetList = filterDataList.slice((pageNumber - 1) * defaultPageSize, pageNumber * defaultPageSize);
         setCurrentDataList(targetList);
         onFetchList && onFetchList(targetList);
       }
@@ -152,10 +158,7 @@ const BaseTable = function <T extends Object>(
         setPageNumber(1);
       }
     } else {
-      if (
-        lastFetchParams[feFixedKey] &&
-        lastFetchParams[feFixedKey] === fetchParams[feFixedKey]
-      ) {
+      if (lastFetchParams[feFixedKey] && lastFetchParams[feFixedKey] === fetchParams[feFixedKey]) {
         feResetByQuery(dataList);
         setPageNumber(1);
       } else {
@@ -201,11 +204,7 @@ const BaseTable = function <T extends Object>(
       const filteredData = data.filter((dataItem) => {
         let flag = false;
 
-        if (
-          query === '' ||
-          !Array.isArray(feQueryParams) ||
-          feQueryParams.length === 0
-        ) {
+        if (query === '' || !Array.isArray(feQueryParams) || feQueryParams.length === 0) {
           flag = true;
           return flag;
         } else {
@@ -222,10 +221,7 @@ const BaseTable = function <T extends Object>(
       });
       setFilterDataList(filteredData);
       setTotal(filteredData.length);
-      const targetList = filteredData.slice(
-        (pageNumber - 1) * defaultPageSize,
-        pageNumber * defaultPageSize,
-      );
+      const targetList = filteredData.slice((pageNumber - 1) * defaultPageSize, pageNumber * defaultPageSize);
       setCurrentDataList(targetList);
       onFetchList && onFetchList(targetList);
     } else {
@@ -247,10 +243,7 @@ const BaseTable = function <T extends Object>(
       const key = keyString.slice(0, index);
 
       if (data[key]) {
-        return getRealData(
-          keyString.slice(index + 1, keyString.length),
-          data[key],
-        );
+        return getRealData(keyString.slice(index + 1, keyString.length), data[key]);
       } else {
         return '';
       }
@@ -276,10 +269,7 @@ const BaseTable = function <T extends Object>(
               if (rightIndex === keyString.length - 1) {
                 return targetData[key];
               } else {
-                return getRealData(
-                  keyString.slice(rightIndex + 1, keyString.length),
-                  data[key],
-                );
+                return getRealData(keyString.slice(rightIndex + 1, keyString.length), data[key]);
               }
             } else {
               return '';
@@ -294,9 +284,7 @@ const BaseTable = function <T extends Object>(
     };
 
     if (keyString.indexOf('.') !== -1 && keyString.indexOf('[') !== -1) {
-      return keyString.indexOf('.') < keyString.indexOf('[')
-        ? curObject()
-        : curArray();
+      return keyString.indexOf('.') < keyString.indexOf('[') ? curObject() : curArray();
     } else if (keyString.indexOf('.') !== -1) {
       return curObject();
     } else if (keyString.indexOf('[') !== -1) {

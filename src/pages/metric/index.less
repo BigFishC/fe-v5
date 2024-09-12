@@ -11,30 +11,26 @@
       width: 16px;
       margin-left: 0;
       background: #f6f5f6;
-      background-image: linear-gradient(
-        90deg,
-        rgba(0, 0, 0, 0.08) 0,
-        #f6f5f6 10px
-      );
+      background-image: linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0, #f6f5f6 10px);
       z-index: 2;
     }
     width: 100%;
-    padding: 20px 35px 20px 20px;
+    padding: 10px 25px 10px 10px;
     display: flex;
     flex-direction: column;
-    .page-title {
-      font-size: 17px;
-      color: black;
-      font-weight: bold;
-      .anticon {
-        margin-right: 10px;
-      }
-    }
+    // .page-title {
+    //   font-size: @baseFontSizeMiddle;
+    //   color: black;
+    //   font-weight: bold;
+    //   .anticon {
+    //     margin-right: 10px;
+    //   }
+    // }
     .panel {
       padding: 8px;
       background: @panelBackground;
       border-radius: 4px;
-      margin-top: 25px;
+      margin-bottom: 25px;
       .title {
         margin-bottom: 5px;
         font-size: 14px;
@@ -60,7 +56,9 @@
     }
   }
   .right {
-    overflow-y: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     background: #f6f5f6;
     .header {
       display: flex;
@@ -72,11 +70,10 @@
         width: 360px;
         display: flex;
       }
-      .reload-icon {
-        margin: 0px 15px;
-      }
     }
     .chart-list {
+      flex: 1;
+      overflow: auto;
       padding-right: 16px;
       .ant-col {
         margin-top: 15px;
@@ -91,7 +88,7 @@
         border: 2px solid #e0dee2;
         margin: 10px;
         background: #fff;
-        color: #1890ff;
+        color: @primary-color;
         & > span {
           margin-left: 5px;
         }

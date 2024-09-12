@@ -1,4 +1,21 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import dayjs from 'dayjs';
+import { Range } from '@/components/DateRangePicker';
 export enum ChartType {
   Line = 'line',
   Pie = 'pie',
@@ -69,26 +86,12 @@ export interface Tag {
   value: string;
 }
 
-export interface Param {
-  start: number;
-  end: number;
-}
-
-export function isParam(range: any): range is Param {
-  if (range && range.start && range.end) {
-    return true;
-  }
-  return false;
-}
-
-export interface RangeItem {
-  num: number;
-  unit: string;
-  shortUnit: dayjs.OpUnitType;
+export interface TagForVariable extends Tag {
+  metric: string;
 }
 
 export interface ChartComponentProps {
-  range: Param | RangeItem;
+  range: Range;
   limit: number;
   metric: string | string[];
   idents?: string[];
@@ -99,6 +102,7 @@ export interface ChartComponentProps {
   prome_ql?: string[] | string;
   yplotline?: number;
   xplotline?: number; //秒
+  step?: number | null;
 }
 
 export interface ChartFilterProps {

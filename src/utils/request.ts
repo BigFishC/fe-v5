@@ -1,78 +1,28 @@
 /** Request 网络请求工具 更详细的 api 文档: https://github.com/umijs/umi-request */
 import { extend } from 'umi-request';
 import { notification } from 'antd';
+import { UpdateAccessToken } from '@/services/login';
 
-export function isValidKey(
-  key: string | number | symbol,
-  object: object,
-): key is keyof typeof object {
-  return key in object;
-}
-
-enum ErrorType {
-  HttpError = 'HttpError',
-  InterfaceError = 'InterfaceError',
-}
-
-export class HttpError extends Error {
-  constructor(public statusCode: number, public message: string) {
-    super(message);
-    this.name = ErrorType.HttpError;
-  }
-}
-
-export class InterfaceError extends Error {
-  constructor(public message: string, public data?: any) {
-    super(message);
-    this.name = ErrorType.InterfaceError;
-  }
-}
-
-const codeMessage = {
-  200: '服务器成功返回请求的数据。',
-  201: '新建或修改数据成功。',
-  202: '一个请求已经进入后台排队（异步任务）。',
-  204: '删除数据成功。',
-  400: '发出的请求有错误，服务器没有进行新建或修改数据的操作。',
-  401: '用户没有权限（令牌、用户名、密码错误）。',
-  403: '用户得到授权，但是访问是被禁止的。',
-  404: '发出的请求针对的是不存在的记录，服务器没有进行操作。',
-  406: '请求的格式不可得。',
-  410: '请求的资源被永久删除，且不会再得到的。',
-  422: '当创建一个对象时，发生一个验证错误。',
-  500: '服务器发生错误，请检查服务器。',
-  502: '网关错误。',
-  503: '服务不可用，服务器暂时过载或维护。',
-  504: '网关超时。',
-};
-
-interface Error {
-  response: Response;
-  data: {
-    err: string;
-  };
-}
 /** 异常处理程序，所有的error都被这里处理，页面无法感知具体error */
 const errorHandler = (error: Error): Response => {
-  const { response } = error;
-  if (response && response.status) {
-    const errorText: string =
-      (isValidKey(response.status, codeMessage) &&
-        codeMessage[response.status]) ||
-      response.statusText;
-
-    const { status, url } = response;
-    notification.error({
-      message: `请求错误${status}${url}`,
-      description: errorText,
-    });
-  } else if (!response) {
-    const { data } = error;
-    notification.error({
-      message: data?.err || '您的网络发生异常，无法连接服务器',
-    });
+  // 忽略掉 setting getter-only property "data" 的错误
+  // 这是 umi-request 的一个 bug，当触发 abort 时 catch callback 里面不能 set data
+  if (error.name !== 'AbortError' && error.message !== 'setting getter-only property "data"') {
+    // @ts-ignore
+    if (!error.silence) {
+      notification.error({
+        message: error.message,
+      });
+    }
+    // @ts-ignore
+    if (error.silence) {
+      // TODO: 兼容 n9e，暂时认定只有开启 silence 的场景才需要传递 error 详情
+      throw error;
+    } else {
+      throw new Error(error.message);
+    }
   }
-  throw new Error();
+  throw error;
 };
 
 /** 配置request请求时的默认参数 */
@@ -85,9 +35,11 @@ request.interceptors.request.use((url, options) => {
   let headers = {
     ...options.headers,
   };
-  if (!window.location.pathname.startsWith('/chart/')) {
-    headers['X-CSRF-TOKEN'] = localStorage.getItem('csrfToken') || '';
+  headers['Authorization'] = `Bearer ${localStorage.getItem('access_token') || ''}`;
+  if (!headers['X-Cluster']) {
+    headers['X-Cluster'] = localStorage.getItem('curCluster') || '';
   }
+  headers['X-Language'] = 'zh';
   return {
     url,
     options: { ...options, headers },
@@ -98,42 +50,149 @@ request.interceptors.request.use((url, options) => {
  * 响应拦截
  */
 request.interceptors.response.use(
-  (request) => {
-    const { status, statusText } = request;
+  async (response, options) => {
+    const { status } = response;
+
     if (status === 200) {
-      return request
+      return response
         .clone()
         .json()
         .then((data) => {
-          if (data.err === '') {
-            if (
-              data.dat &&
-              Object.prototype.toString.call(data.dat.list) === '[object Null]'
-            ) {
-              data.dat.list = [];
+          if (response.url.includes('/api/v1/') || response.url.includes('/api/v2') || response.url.includes('/api/n9e-plus/datasource')) {
+            if (status === 200 && !data.error) {
+              return { ...data, success: true };
+            } else if (data.error) {
+              if (response.url.indexOf('/api/n9e/prometheus/api/v1') > -1 || response.url.indexOf('/api/v1/datasource/prometheus') > -1) {
+                return data;
+              } else {
+                // @ts-ignore
+                throw new Error(data.error.message, { cause: options.silence });
+              }
             }
-            return { ...data, success: true };
           } else {
-            throw new InterfaceError(data.err, data);
+            if (data.err === '' || data.status === 'success' || data.error === '') {
+              if (data.data || data.dat) {
+                if (data.dat && Object.prototype.toString.call(data.dat.list) === '[object Null]') {
+                  data.dat.list = [];
+                }
+              }
+              return { ...data, success: true };
+            } else {
+              if (options.silence) {
+                throw {
+                  name: data.err,
+                  message: data.err,
+                  silence: true,
+                  data,
+                  response,
+                };
+              } else {
+                throw new Error(data.err);
+              }
+            }
           }
         });
     }
-    if (status === 401 || status === 452) {
-      location.href = `/login${
-        location.pathname != '/' ? '?redirect=' + location.pathname : ''
-      }`;
+    // 屏蔽日志侧拉板接口报错
+    if (status === 500 && response.url.indexOf('/api/v1/dimensions/log/aggregation') > -1) {
+      return;
     }
-    if (status === 404) {
-      return request
+    // 兼容异常处理
+    if (status === 500 && (response.url.includes('/api/v1') || response.url.includes('/api/v2'))) {
+      return response
         .clone()
         .json()
         .then((data) => {
-          notification.error({
-            message: data?.err || '您的网络发生异常，无法连接服务器',
-          });
+          if (!data.error) {
+            return { ...data, success: true };
+            // if (data.data || data.dat) {
+            //   return { ...data, success: true };
+            // } else {
+            //   return { success: true };
+            // }
+          } else if (data.error) {
+            throw {
+              name: data.error.name,
+              message: data.error.message,
+              silence: options.silence,
+              data,
+              response,
+            };
+          }
         });
     }
-    throw new Error();
+    if (status === 401) {
+      if (response.url.indexOf('/api/n9e/prometheus/api/v1') > -1 || response.url.indexOf('/api/v1/datasource/prometheus') > -1) {
+        return response
+          .clone()
+          .json()
+          .then((data) => {
+            throw new Error(data.err ? data.err : data);
+          });
+      } else if (response.url.indexOf('/api/n9e/auth/refresh') > 0) {
+        location.href = `/login${location.pathname != '/' ? '?redirect=' + location.pathname + location.search : ''}`;
+      } else {
+        localStorage.getItem('refresh_token')
+          ? UpdateAccessToken().then((res) => {
+              console.log('401 err', res);
+              if (res.err) {
+                location.href = `/login${location.pathname != '/' ? '?redirect=' + location.pathname + location.search : ''}`;
+              } else {
+                const { access_token, refresh_token } = res.dat;
+                localStorage.setItem('access_token', access_token);
+                localStorage.setItem('refresh_token', refresh_token);
+                location.href = `${location.pathname}${location.search}`;
+              }
+            })
+          : (location.href = `/login${location.pathname != '/' ? '?redirect=' + location.pathname + location.search : ''}`);
+      }
+      // } else if (status === 404) {
+      //   location.href = '/404';
+    } else if (status === 403 && (response.url.includes('/api/v1') || response.url.includes('/api/v2'))) {
+      return response
+        .clone()
+        .json()
+        .then((data) => {
+          location.href = '/403';
+          if (data.error && data.error.message) throw new Error(data.error.message);
+        });
+    } else {
+      const contentType = response.headers.get('content-type');
+      const isPlainText = contentType?.indexOf('text/plain; charset=utf-8') !== -1;
+      const isJson = contentType?.indexOf('application/json') !== -1;
+      if (!isJson) {
+        return response
+          .clone()
+          .text()
+          .then((data) => {
+            throw new Error(status + data);
+          });
+      } else {
+        return response
+          .clone()
+          .json()
+          .then((data) => {
+            // 兼容 n9e 中的 prometheus api
+            if (options.silence === undefined) {
+              if (response.url.indexOf('/api/n9e/prometheus/api/v1') > -1 || response.url.indexOf('/api/v1/datasource/prometheus') > -1) {
+                return data;
+              }
+            }
+            if (response.url.includes('/api/v1') || response.url.includes('/api/v2')) {
+              throw {
+                // TODO: 后端服务异常后可能返回的错误数据也不是一个正常的结构，后面得考虑下怎么处理
+                name: data.error ? data.error.name : JSON.stringify(data),
+                message: data.error ? data.error.message : JSON.stringify(data),
+                silence: options.silence,
+                data,
+                response,
+              };
+            } else {
+              throw new Error(data.err ? data.err : data);
+            }
+          });
+      }
+    }
   },
   {
     global: false,

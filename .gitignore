@@ -4,5 +4,10 @@ dist
 dist-ssr
 *.local
 .vscode
-package-lock.json
 .idea/*
+pub
+deploy.sh
+src/Packages/*
+stats.html
+build.sh
+.env.advanced

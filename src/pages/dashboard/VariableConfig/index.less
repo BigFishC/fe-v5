@@ -5,12 +5,6 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  .tag-header {
-    font-size: @baseFontSizeSmall;
-    font-weight: bold;
-    color: @fontColorLevel4;
-    margin-bottom: 8px;
-  }
 
   .tag-content {
     &-item {
@@ -22,9 +16,12 @@
         box-sizing: border-box;
         line-height: 32px;
         padding: 0 20px;
-        font-size: @baseFontSizeSmall;
+        font-size: @baseFontSizeTiny;
         background: @colorDangerBackground;
         color: @fontColorLevel4;
+        span {
+          transform: scale(0.8);
+        }
       }
     }
   }
@@ -32,14 +29,19 @@
   .tag-content-close {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     &-item {
       display: flex;
       flex-direction: row;
+      align-items: flex-start; // 防止其他 item 的 label被撑开
       margin-right: 12px;
+      .ant-select {
+        flex: 1;
+      }
       &-tagName {
         line-height: 32px;
         padding: 0 8px;
-        background: @colorGray7;
+        background: #eaeaea;
         border-radius: 4px 0 0 4px;
       }
     }
@@ -61,16 +63,24 @@
     font-size: @baseFontSizeMiddle;
     line-height: 32px;
     cursor: pointer;
-    margin-left: 8px;
   }
 
   .tag-control-area {
     display: flex;
     flex-direction: row;
+    margin-bottom: 10px;
     button {
       &:last-of-type {
         margin-left: 8px;
       }
     }
+  }
+}
+.variable-modal {
+  .tag-header {
+    font-size: @baseFontSizeTiny;
+    font-weight: bold;
+    color: @fontColorLevel4;
+    margin-bottom: 8px;
   }
 }
